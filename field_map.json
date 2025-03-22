@@ -1,0 +1,20 @@
+{
+  "latitude": "Lat",
+  "longitude": "Long",
+  "occurred_on_date": "OCCURRED_ON_DATE",
+  "attributes": {
+    "incident_number": "INCIDENT_NUMBER",
+    "offense_code": "OFFENSE_CODE",
+    "offense_code_group": "OFFENSE_CODE_GROUP",
+    "offense_description": "OFFENSE_DESCRIPTION",
+    "district": "DISTRICT",
+    "reporting_area": "REPORTING_AREA",
+    "shooting": "SHOOTING",
+    "year": "YEAR",
+    "month": "MONTH",
+    "day_of_week": "DAY_OF_WEEK",
+    "hour": "HOUR",
+    "ucr_part": "UCR_PART",
+    "street": "STREET"
+  }
+}

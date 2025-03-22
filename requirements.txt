@@ -1,0 +1,4 @@
+arcgis
+python-dotenv
+requests
+python-dateutil

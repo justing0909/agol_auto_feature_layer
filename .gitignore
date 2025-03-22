@@ -1,0 +1,8 @@
+update_log.txt
+.env
+.env.*
+*.log
+*.pyc
+__pycache__/
+*.egg-info/
+build/
