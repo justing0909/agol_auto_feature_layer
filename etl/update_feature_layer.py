@@ -1,5 +1,4 @@
 # etl/update_feature_layer.py
-import logging
 from arcgis.gis import GIS
 from arcgis.features import FeatureLayer
 from datetime import datetime, timedelta, timezone
@@ -13,19 +12,11 @@ load_dotenv()
 AGOL_USERNAME = os.environ.get("AGOL_USERNAME")
 AGOL_PASSWORD = os.environ.get("AGOL_PASSWORD")
 FEATURE_LAYER_URL = "https://services1.arcgis.com/KUeKSLlMUcWvuPRM/arcgis/rest/services/crime_layer_fl/FeatureServer/0"
-LOG_FILE = "update_log.txt"
 
 # Socrata API
 API_URL = "https://data.boston.gov/api/3/action/datastore_search"
 RESOURCE_ID = "b973d8cb-eeb2-4e7e-99da-c92938efc9c0"
 PAGE_LIMIT = 1000
-
-# --- LOGGING SETUP ---
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 def fetch_all_records(api_url, resource_id, days_back, field_map=None):
     latest_occurred_date = None
@@ -44,18 +35,13 @@ def fetch_all_records(api_url, resource_id, days_back, field_map=None):
         response = requests.get(API_URL, params=params)
 
         if response.status_code != 200:
-            logging.error(f"Failed API request (status code {response.status_code}): {response.text}")
             break
 
         data = response.json()
         if "result" not in data or "records" not in data["result"]:
-            logging.error(f"Unexpected API response format: {data}")
             break
 
         records = data["result"]["records"]
-        logging.info(f"Raw record count: {len(records)}")
-        if records:
-            logging.info(f"Sample record: {records[0]}")
 
         if not records:
             break
@@ -65,24 +51,20 @@ def fetch_all_records(api_url, resource_id, days_back, field_map=None):
                 lat_raw = rec.get(field_map.get("latitude", "Lat")) if field_map else rec.get("Lat")
                 lon_raw = rec.get(field_map.get("longitude", "Long")) if field_map else rec.get("Long")
                 if lat_raw is None or lon_raw is None:
-                    logging.warning("Missing Lat/Long in record")
                     continue
                 lat = float(lat_raw)
                 lon = float(lon_raw)
                 occurred_date_str = rec.get(field_map.get("occurred_on_date", "OCCURRED_ON_DATE")) if field_map else rec.get("OCCURRED_ON_DATE")
                 if not occurred_date_str:
-                    logging.warning("Missing occurred_on_date in record")
                     continue
                 occurred_date = parse(occurred_date_str)
                 if occurred_date.tzinfo is None:
                     occurred_date = occurred_date.replace(tzinfo=timezone.utc)
-                # logging.info(f"Comparing occurred: {occurred_date.isoformat()} vs 7-day cutoff: {cutoff_time.isoformat()}")
                 if latest_occurred_date is None or occurred_date > latest_occurred_date:
                     latest_occurred_date = occurred_date
                 if occurred_date < cutoff_time:
                     continue
-            except (KeyError, ValueError, TypeError) as e:
-                logging.warning(f"Record skipped due to error: {e}. Record: {rec}")
+            except (KeyError, ValueError, TypeError):
                 continue
 
             if field_map:
@@ -95,10 +77,7 @@ def fetch_all_records(api_url, resource_id, days_back, field_map=None):
                 }
             base_attrs["updated_on"] = datetime.now(timezone.utc).isoformat()
 
-            # Validate against AGOL schema
             valid_attrs = {k: v for k, v in base_attrs.items() if k in agol_field_names or k == "updated_on"}
-
-            logging.info(f"Constructed valid_attrs: {valid_attrs}")
 
             all_features.append({
                 "geometry": {
@@ -109,17 +88,11 @@ def fetch_all_records(api_url, resource_id, days_back, field_map=None):
                 "attributes": base_attrs
             })
 
-        logging.info(f"Fetched {len(records)} records (offset {offset})")
         offset += PAGE_LIMIT
 
-        # Add page size check to prevent infinite loop if API returns fewer records than requested
         if len(records) < PAGE_LIMIT:
             break
 
-    if latest_occurred_date:
-        logging.info(f"Most recent OCCURRED_ON_DATE found: {latest_occurred_date.isoformat()}")
-    else:
-        logging.info("No OCCURRED_ON_DATE values found.")
     return all_features
 
 def update_feature_layer(username, password, org_url, feature_layer_url, api_url, resource_id, field_map, days_back=7):
@@ -127,36 +100,25 @@ def update_feature_layer(username, password, org_url, feature_layer_url, api_url
         features = fetch_all_records(api_url, resource_id, days_back, field_map=field_map)
 
         if not features:
-            logging.warning("No features to upload.")
             return
         
-        # Log example attributes being uploaded
-        logging.info(f"Example feature attributes to upload: {features[0]['attributes']}")
-
         gis = GIS(org_url, username, password, verify_cert=False)
-        logging.info("Authenticated as {}".format(gis.users.me.username))
 
         target_layer = FeatureLayer(feature_layer_url)
         del_result = target_layer.delete_features(where="1=1")
-        logging.info("Deleted existing features.")
 
         if features:
             def chunk_features(features, size):
                 for i in range(0, len(features), size):
                     yield features[i:i + size]
 
-            total_uploaded = 0
             for i, chunk in enumerate(chunk_features(features, 500)):
                 result = target_layer.edit_features(adds=chunk)
-                total_uploaded += len(chunk)
-
-            logging.info(f"Total uploaded: {total_uploaded} features.")
-            logging.info("Cron job executed successfully.")
         else:
-            logging.warning("No features to upload.")
+            pass
 
-    except Exception as e:
-        logging.error(f"Update failed: {e}")
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     import argparse
@@ -186,6 +148,6 @@ if __name__ == "__main__":
         feature_layer_url=args.layer_url,
         api_url=args.api_url,
         resource_id=args.resource_id,
-        days_back=args.days,
-        field_map=field_map
+        field_map=field_map,
+        days_back=args.days
     )
