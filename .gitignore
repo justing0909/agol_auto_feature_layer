@@ -1,4 +1,4 @@
-update_log.txt
+cron_output.txt
 .env
 .env.*
 *.log
@@ -6,3 +6,4 @@ update_log.txt
 __pycache__/
 *.egg-info/
 build/
+run_update.sh
